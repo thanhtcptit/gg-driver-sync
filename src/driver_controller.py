@@ -153,7 +153,7 @@ def sync_local(service):
     remote_items, _ = build_remote_file_path(folders, files)
     prefix = os.path.split(SYNC_FOLDER)[0]
     for file_id, remote_path in remote_items.items():
-        local_path = prefix + remote_path
+        local_path = os.path.join(prefix, remote_path)
         if not os.path.exists(local_path):
             path, file_name = os.path.split(local_path)
             if not os.path.exists(path):
@@ -167,7 +167,7 @@ def sync_remote(service):
     folders = get_all_folders(service)
     files = get_all_files(service)
     print('Build remote directory structure..')
-    local_paths = build_local_file_path(prefix)
+    local_paths = build_local_file_path(SYNC_FOLDER)
     remote_items, remote_folders = build_remote_file_path(folders, files)
     remote_item_paths = list(remote_items.values())
     remote_folders_paths = list(remote_folders.values())
