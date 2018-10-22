@@ -1,4 +1,4 @@
-from structure import build_local_file_path, build_remote_file_path
+from utils import build_local_file_path, build_remote_file_path
 
 from googleapiclient.discovery import build, MediaFileUpload
 
@@ -23,6 +23,7 @@ def _parse_args():
 
 # If modifying these scopes, delete the file token.json.
 SCOPES = 'https://www.googleapis.com/auth/drive'
+SYNC_FOLDER = '/home/nero/Documents'
 
 
 def build_drive():
@@ -130,7 +131,7 @@ def create_recursive_folders(service, folder_path, remote_folders):
             parent_id = fid
             break
     if not is_exist:
-        parent_id = create_driver_folder(service, p, remote_folders)
+        parent_id = create_recursive_folders(service, p, remote_folders)
     return create_driver_folder(service, d, parent_id)
 
 
@@ -150,7 +151,7 @@ def sync_local(service):
     files = get_all_files(service)
     print('Build local directory structure..')
     remote_items, _ = build_remote_file_path(folders, files)
-    prefix = '/home/nero/'
+    prefix = os.path.split(SYNC_FOLDER)[0]
     for file_id, remote_path in remote_items.items():
         local_path = prefix + remote_path
         if not os.path.exists(local_path):
@@ -166,14 +167,13 @@ def sync_remote(service):
     folders = get_all_folders(service)
     files = get_all_files(service)
     print('Build remote directory structure..')
-    prefix = '/home/nero/Documents'
     local_paths = build_local_file_path(prefix)
     remote_items, remote_folders = build_remote_file_path(folders, files)
     remote_item_paths = list(remote_items.values())
     remote_folders_paths = list(remote_folders.values())
 
     for path in local_paths:
-        remote_path = path[path.find(os.path.split(prefix)[1]):]
+        remote_path = path[path.find(os.path.split(SYNC_FOLDER)[1]):]
         if remote_path not in remote_item_paths:
             folder_path, file_name = os.path.split(remote_path)
             if folder_path not in remote_folders_paths:
