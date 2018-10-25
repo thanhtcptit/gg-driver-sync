@@ -1,4 +1,4 @@
-from utils import build_local_file_path, build_remote_file_path
+from utils import *
 
 from googleapiclient.discovery import build, MediaFileUpload
 
@@ -23,7 +23,8 @@ def _parse_args():
 
 # If modifying these scopes, delete the file token.json.
 SCOPES = 'https://www.googleapis.com/auth/drive'
-SYNC_FOLDER = '/home/nero/Documents'
+SYNC_FOLDER = '/home/nero/Documents/Driver'
+ROOT_FOLDER = os.path.split(SYNC_FOLDER)[1]
 
 
 def build_drive():
@@ -116,8 +117,8 @@ def create_driver_folder(service, name, parent_id):
         'mimeType': 'application/vnd.google-apps.folder',
         'parents': [parent_id]
     }
-    file = drive_service.files().create(body=file_metadata,
-                                        fields='id').execute()
+    file = service.files().create(body=file_metadata,
+                                  fields='id').execute()
     print('Folder ID: %s' % file.get('id'))
     return file.get('id')
 
@@ -169,8 +170,8 @@ def sync_remote(service):
     print('Build remote directory structure..')
     local_paths = build_local_file_path(SYNC_FOLDER)
     remote_items, remote_folders = build_remote_file_path(folders, files)
-    remote_item_paths = list(remote_items.values())
-    remote_folders_paths = list(remote_folders.values())
+    remote_item_paths = set(remote_items.values())
+    remote_folders_paths = set(remote_folders.values())
 
     for path in local_paths:
         remote_path = path[path.find(os.path.split(SYNC_FOLDER)[1]):]
@@ -179,6 +180,7 @@ def sync_remote(service):
             if folder_path not in remote_folders_paths:
                 folder_id = create_recursive_folders(
                     service, folder_path, remote_folders)
+                remote_folders_paths.add(folder_path)
             else:
                 for fid, fpath in remote_folders.items():
                     if folder_path == fpath:
@@ -202,7 +204,6 @@ def main():
         sync_local(service)
     else:
         sync_remote(service)
-    # upload_file(service, 'test.pdf', 'application/pdf')
 
 
 if __name__ == '__main__':

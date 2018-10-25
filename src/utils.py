@@ -1,3 +1,5 @@
+from driver_controller import ROOT_FOLDER
+
 import os
 
 
@@ -17,16 +19,19 @@ def get_remote_absolute_path(file, folders):
     curr_file = file
     path = [file['name'].strip()]
     while 'parents' in curr_file:
+        stop = True
         parent_id = curr_file['parents'][0]
-        if parent_id == '0AHG27Xwd_lIMUk9PVA':
+        if curr_file['name'] == ROOT_FOLDER:
             break
         for folder in folders:
             if parent_id == folder['id']:
                 path.append(folder['name'].strip())
                 curr_file = folder
+                stop = False
                 break
+        if stop:
+            break
     path = reversed(path)
-
     return '/'.join(path)
 
 
@@ -39,7 +44,6 @@ def build_remote_file_path(folders, files):
     for f in folders:
         path = get_remote_absolute_path(f, folders)
         folder_paths[f['id']] = path
-
     return file_paths, folder_paths
 
 
