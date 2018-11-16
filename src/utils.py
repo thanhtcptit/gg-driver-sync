@@ -40,7 +40,7 @@ def build_remote_file_path(folders, files):
     folder_paths = {}
     for f in files:
         path = get_remote_absolute_path(f, folders)
-        file_paths[f['id']] = path
+        file_paths[f['id']] = [path, f]
     for f in folders:
         path = get_remote_absolute_path(f, folders)
         folder_paths[f['id']] = path

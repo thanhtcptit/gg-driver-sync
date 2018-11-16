@@ -25,6 +25,7 @@ def _parse_args():
 SCOPES = 'https://www.googleapis.com/auth/drive'
 SYNC_FOLDER = '/home/nero/Documents/Driver'
 ROOT_FOLDER = os.path.split(SYNC_FOLDER)[1]
+ACCEPT_EXT = ['.pdf', '.epub', '.doc', '.docx', '.odt']
 
 
 def build_drive():
@@ -42,7 +43,7 @@ def get_list_items(service, query):
     results = service.files().list(
         q=query,
         pageSize=300,
-        fields="nextPageToken, files(id, name, parents)").execute()
+        fields="nextPageToken, files(id, name, parents, size)").execute()
     items = results.get('files', [])
     return items
 
@@ -89,8 +90,23 @@ def list_folders(service):
                 item['name'], item['id'], item['parents']))
 
 
+def compare_file(local_path, remote_file):
+    local_size = os.path.getsize(local_path)
+    remote_size = remote_file['size']
+    if int(local_size) != int(remote_size):
+        print('Diff: {}'.format(local_path))
+        print('- Local : {} - Remote: {}'.format(local_size, remote_size))
+        return -1
+    return 1
+
+
 def upload_media(service, file_path, mimeType, parent_id=None):
     file_name = os.path.split(file_path)[1]
+    _, ext = os.path.splitext(file_name)
+    if ext not in ACCEPT_EXT:
+        print('- Skip ')
+        return
+
     if parent_id:
         metadata = {
             'name': file_name,
@@ -100,15 +116,34 @@ def upload_media(service, file_path, mimeType, parent_id=None):
         metadata = {
             'name': file_name,
         }
+
     media = MediaFileUpload(
         file_path, mimetype=mimeType, resumable=True)
-
     res = service.files().create(
         body=metadata, media_body=media, fields='id').execute()
+
     if res:
-        print('File ID: %s' % res.get('id'))
-        return res.get('id')
-    return None
+        print('- File ID: %s.' % res.get('id'))
+    else:
+        print('- Error.')
+
+
+def delete_media(service, remote_file):
+    print('Delete ', remote_file['name'])
+    try:
+        service.files().delete(fileId=remote_file['id']).execute()
+        print('- Done.')
+        return 1
+    except Exception as e:
+        print('- Error: %s' % e)
+    return 0
+
+
+def update_media(service, file_path, mime_type, folder_id, remote_file):
+    print("Update '{}' to driver".format(file_path))
+    res = delete_media(service, remote_file)
+    if res:
+        upload_media(service, file_path, mime_type, folder_id)
 
 
 def create_driver_folder(service, name, parent_id):
@@ -136,14 +171,26 @@ def create_recursive_folders(service, folder_path, remote_folders):
     return create_driver_folder(service, d, parent_id)
 
 
-def download_file(service, file_id, save_path, mimeType='application/pdf'):
-    request = service.files().get_media(fileId=file_id)
-    fh = io.FileIO(save_path, 'wb')
-    downloader = MediaIoBaseDownload(fh, request)
-    done = False
-    while done is False:
-        status, done = downloader.next_chunk()
-        print("- Download %d%%." % int(status.progress() * 100))
+def download_file(service, file_id, local_path, mimeType='application/pdf'):
+    path, file_name = os.path.split(local_path)
+    _, ext = os.path.splitext(file_name)
+    if ext not in ACCEPT_EXT:
+        print('- Skip ', local_path)
+        return
+    if not os.path.exists(path):
+        os.makedirs(path)
+
+    print("Downloading '{}' and save to '{}'".format(file_name, path))
+    try:
+        request = service.files().get_media(fileId=file_id)
+        fh = io.FileIO(local_path, 'wb')
+        downloader = MediaIoBaseDownload(fh, request)
+        done = False
+        while done is False:
+            status, done = downloader.next_chunk()
+            print("- Download %d%%." % int(status.progress() * 100))
+    except Exception as e:
+        print('- Error', e)
 
 
 def sync_local(service):
@@ -153,14 +200,16 @@ def sync_local(service):
     print('Build local directory structure..')
     remote_items, _ = build_remote_file_path(folders, files)
     prefix = os.path.split(SYNC_FOLDER)[0]
-    for file_id, remote_path in remote_items.items():
+    for file_id, file_content in remote_items.items():
+        remote_path, remote_item = file_content
         local_path = os.path.join(prefix, remote_path)
         if not os.path.exists(local_path):
-            path, file_name = os.path.split(local_path)
-            if not os.path.exists(path):
-                os.makedirs(path)
-            print("Downloading '{}' and save to '{}'".format(file_name, path))
             download_file(service, file_id, local_path)
+        else:
+            res = compare_file(local_path, remote_item)
+            if res == -1:
+                os.remove(local_path)
+                download_file(service, file_id, local_path)
 
 
 def sync_remote(service):
@@ -170,13 +219,13 @@ def sync_remote(service):
     print('Build remote directory structure..')
     local_paths = build_local_file_path(SYNC_FOLDER)
     remote_items, remote_folders = build_remote_file_path(folders, files)
-    remote_item_paths = set(remote_items.values())
+    remote_item_paths = {p: i for p, i in remote_items.values()}
     remote_folders_paths = set(remote_folders.values())
 
     for path in local_paths:
         remote_path = path[path.find(os.path.split(SYNC_FOLDER)[1]):]
+        folder_path, file_name = os.path.split(remote_path)
         if remote_path not in remote_item_paths:
-            folder_path, file_name = os.path.split(remote_path)
             if folder_path not in remote_folders_paths:
                 folder_id = create_recursive_folders(
                     service, folder_path, remote_folders)
@@ -188,9 +237,17 @@ def sync_remote(service):
                         break
             print("Uploading '{}' to driver location: '{}'".format(
                 file_name, folder_path))
-            res = upload_media(service, path, 'application/pdf', folder_id)
-            if res:
-                print('- Done.')
+            upload_media(service, path, 'application/pdf', folder_id)
+        else:
+            res = compare_file(path, remote_item_paths[remote_path])
+            if res == -1:
+                for fid, fpath in remote_folders.items():
+                    if folder_path == fpath:
+                        folder_id = fid
+                        break
+                update_media(
+                    service, path, 'application/pdf', folder_id,
+                    remote_item_paths[remote_path])
 
 
 def main():
