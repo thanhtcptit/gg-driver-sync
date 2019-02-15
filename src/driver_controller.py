@@ -25,7 +25,7 @@ def _parse_args():
 SCOPES = 'https://www.googleapis.com/auth/drive'
 SYNC_FOLDER = '/home/nero/Documents/Driver'
 ROOT_FOLDER = os.path.split(SYNC_FOLDER)[1]
-ACCEPT_EXT = ['.pdf', '.epub', '.doc', '.docx', '.odt']
+ACCEPT_EXT = ['.pdf', '.epub', '.doc', '.docx', '.odt', '.pptx']
 
 
 def build_drive():
