@@ -42,7 +42,7 @@ def build_drive():
 def get_list_items(service, query):
     results = service.files().list(
         q=query,
-        pageSize=300,
+        pageSize=1000,  # maximum pageSize availabel
         fields="nextPageToken, files(id, name, parents, size)").execute()
     items = results.get('files', [])
     return items
@@ -208,8 +208,15 @@ def sync_local(service):
         else:
             res = compare_file(local_path, remote_item)
             if res == -1:
-                os.remove(local_path)
-                download_file(service, file_id, local_path)
+                option = input('Override {} with {}?(y/n): '.format(
+                    local_path, remote_path))
+                while option != 'y' and option != 'n':
+                    print('Invaild option: ', option)
+                    option = input('Override {} with {}?(y/n): '.format(
+                        local_path, remote_path))
+                if option == 'y':
+                    os.remove(local_path)
+                    download_file(service, file_id, local_path)
 
 
 def sync_remote(service):
@@ -235,19 +242,27 @@ def sync_remote(service):
                     if folder_path == fpath:
                         folder_id = fid
                         break
+
             print("Uploading '{}' to driver location: '{}'".format(
                 file_name, folder_path))
             upload_media(service, path, 'application/pdf', folder_id)
         else:
             res = compare_file(path, remote_item_paths[remote_path])
             if res == -1:
-                for fid, fpath in remote_folders.items():
-                    if folder_path == fpath:
-                        folder_id = fid
-                        break
-                update_media(
-                    service, path, 'application/pdf', folder_id,
-                    remote_item_paths[remote_path])
+                option = input('Override {} with {}?(y/n): '.format(
+                    remote_path, path))
+                while option != 'y' and option != 'n':
+                    print('Invaild option: ', option)
+                    option = input('Override {} with {}?(y/n): '.format(
+                        remote_path, path))
+                if option == 'y':
+                    for fid, fpath in remote_folders.items():
+                        if folder_path == fpath:
+                            folder_id = fid
+                            break
+                    update_media(
+                        service, path, 'application/pdf', folder_id,
+                        remote_item_paths[remote_path])
 
 
 def main():
